@@ -233,8 +233,12 @@ def create_snapshots(conn, volumes, copy_tags=False):
     snaps = []
 
     for vol in volumes:
-        snap = conn.create_snapshot(Description=DESCRIPTION, VolumeId=vol)
-
+        if vol_name := get_volume_name(conn, vol):
+            desc = vol_name+" "+DESCRIPTION
+            snap = conn.create_snapshot(Description=desc, VolumeId=vol)
+        else:
+            snap = conn.create_snapshot(Description=DESCRIPTION, VolumeId=vol)
+           
         logger.info("snap create: %s %s", vol, snap["SnapshotId"])
         snaps.append(snap)
 
@@ -246,3 +250,13 @@ def create_snapshots(conn, volumes, copy_tags=False):
     logger.info("wait for snapshots: %s", [i["SnapshotId"] for i in snaps])
     waiter = conn.get_waiter("snapshot_completed")
     waiter.wait(SnapshotIds=[i["SnapshotId"] for i in snaps])
+
+
+def get_volume_name(conn, id):
+    logger.info("get volume name for %s", id)
+    vol = conn.describe_volumes(VolumeIds=[id])
+    if len(vol["Volumes"]) > 0:
+        tags = vol["Volumes"][0]["Tags"]
+        for tag in tags:
+            if tag["Key"] == "Name":
+                return tag["Value"]
